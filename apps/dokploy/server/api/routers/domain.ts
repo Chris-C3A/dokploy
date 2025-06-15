@@ -143,10 +143,12 @@ export const domainRouter = createTRPCRouter({
 				const newPreviewDeployment = await findPreviewDeploymentById(
 					currentDomain.previewDeploymentId,
 				);
-				if (
-					newPreviewDeployment.application.project.organizationId !==
-					ctx.session.activeOrganizationId
-				) {
+				
+				// Check if user has access to the preview deployment (works for both app and compose)
+				const organizationId = newPreviewDeployment.application?.project.organizationId || 
+														 newPreviewDeployment.compose?.project.organizationId;
+				
+				if (!organizationId || organizationId !== ctx.session.activeOrganizationId) {
 					throw new TRPCError({
 						code: "UNAUTHORIZED",
 						message: "You are not authorized to access this preview deployment",
@@ -162,11 +164,16 @@ export const domainRouter = createTRPCRouter({
 				const previewDeployment = await findPreviewDeploymentById(
 					domain.previewDeploymentId,
 				);
-				const application = await findApplicationById(
-					previewDeployment.applicationId,
-				);
-				application.appName = previewDeployment.appName;
-				await manageDomain(application, domain);
+				
+				// Only handle application preview deployments for domain management
+				// TODO: Implement domain management for compose preview deployments
+				if (previewDeployment.applicationId) {
+					const application = await findApplicationById(
+						previewDeployment.applicationId,
+					);
+					application.appName = previewDeployment.appName;
+					await manageDomain(application, domain);
+				}
 			}
 			return result;
 		}),

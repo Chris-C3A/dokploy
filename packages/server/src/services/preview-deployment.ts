@@ -1,6 +1,7 @@
 import { db } from "@dokploy/server/db";
 import {
 	type apiCreatePreviewDeployment,
+	type apiCreateComposePreviewDeployment,
 	deployments,
 	organization,
 	previewDeployments,
@@ -15,6 +16,7 @@ import { removeTraefikConfig } from "../utils/traefik/application";
 import { manageDomain } from "../utils/traefik/domain";
 import { findUserById } from "./admin";
 import { findApplicationById } from "./application";
+import { findComposeById } from "./compose";
 import { removeDeploymentsByPreviewDeploymentId } from "./deployment";
 import { createDomain } from "./domain";
 import { type Github, getIssueComment } from "./github";
@@ -29,6 +31,12 @@ export const findPreviewDeploymentById = async (
 		with: {
 			domain: true,
 			application: {
+				with: {
+					server: true,
+					project: true,
+				},
+			},
+			compose: {
 				with: {
 					server: true,
 					project: true,
@@ -150,6 +158,36 @@ export const findPreviewDeploymentsByApplicationId = async (
 	return deploymentsList;
 };
 
+export const findPreviewDeploymentsByComposeId = async (
+	composeId: string,
+) => {
+	const deploymentsList = await db.query.previewDeployments.findMany({
+		where: eq(previewDeployments.composeId, composeId),
+		orderBy: desc(previewDeployments.createdAt),
+		with: {
+			deployments: {
+				orderBy: desc(deployments.createdAt),
+			},
+			domain: true,
+		},
+	});
+	return deploymentsList;
+};
+
+export const findPreviewDeploymentByComposeId = async (
+	composeId: string,
+	pullRequestId: string,
+) => {
+	const previewDeploymentResult = await db.query.previewDeployments.findFirst({
+		where: and(
+			eq(previewDeployments.composeId, composeId),
+			eq(previewDeployments.pullRequestId, pullRequestId),
+		),
+	});
+
+	return previewDeploymentResult;
+};
+
 export const createPreviewDeployment = async (
 	schema: typeof apiCreatePreviewDeployment._type,
 ) => {
@@ -250,6 +288,73 @@ export const findPreviewDeploymentByApplicationId = async (
 	});
 
 	return previewDeploymentResult;
+};
+
+export const createComposePreviewDeployment = async (
+	schema: typeof apiCreateComposePreviewDeployment._type,
+) => {
+	const compose = await findComposeById(schema.composeId);
+	const appName = `preview-${compose.appName}-${generatePassword(6)}`;
+
+	const org = await db.query.organization.findFirst({
+		where: eq(organization.id, compose.project.organizationId),
+	});
+	const generateDomain = await generateWildcardDomain(
+		"*.traefik.me", // TODO: Add preview wildcard support for compose
+		appName,
+		compose.server?.ipAddress || "",
+		org?.ownerId || "",
+	);
+
+	const github = compose.github;
+	if (!github) {
+		throw new TRPCError({
+			code: "NOT_FOUND",
+			message: "GitHub configuration not found for compose service",
+		});
+	}
+
+	const octokit = authGithub(github as Github);
+
+	const runningComment = getIssueComment(
+		compose.name,
+		"initializing",
+		generateDomain,
+	);
+
+	const issue = await octokit.rest.issues.createComment({
+		owner: compose?.owner || "",
+		repo: compose?.repository || "",
+		issue_number: Number.parseInt(schema.pullRequestNumber),
+		body: runningComment,
+	});
+
+	const previewDeployment = await db
+		.insert(previewDeployments)
+		.values({
+			...schema,
+			pullRequestCommentId: issue.data.id.toString(),
+			appName,
+		})
+		.returning()
+		.then((value) => value[0]);
+
+	if (!previewDeployment) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "Error to create the preview deployment",
+		});
+	}
+
+	// TODO: Implement domain management for compose preview deployments
+	// For now, we'll skip the domain creation to make this a minimal implementation
+	
+	return await db.query.previewDeployments.findFirst({
+		where: eq(
+			previewDeployments.previewDeploymentId,
+			previewDeployment.previewDeploymentId,
+		),
+	});
 };
 
 const generateWildcardDomain = async (

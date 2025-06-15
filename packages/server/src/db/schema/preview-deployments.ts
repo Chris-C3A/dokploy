@@ -4,6 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { applications } from "./application";
+import { compose } from "./compose";
 import { deployments } from "./deployment";
 import { domains } from "./domain";
 import { applicationStatus } from "./shared";
@@ -25,11 +26,12 @@ export const previewDeployments = pgTable("preview_deployments", {
 		.notNull()
 		.$defaultFn(() => generateAppName("preview"))
 		.unique(),
-	applicationId: text("applicationId")
-		.notNull()
-		.references(() => applications.applicationId, {
-			onDelete: "cascade",
-		}),
+	applicationId: text("applicationId").references(() => applications.applicationId, {
+		onDelete: "cascade",
+	}),
+	composeId: text("composeId").references(() => compose.composeId, {
+		onDelete: "cascade",
+	}),
 	domainId: text("domainId").references(() => domains.domainId, {
 		onDelete: "cascade",
 	}),
@@ -51,11 +53,16 @@ export const previewDeploymentsRelations = relations(
 			fields: [previewDeployments.applicationId],
 			references: [applications.applicationId],
 		}),
+		compose: one(compose, {
+			fields: [previewDeployments.composeId],
+			references: [compose.composeId],
+		}),
 	}),
 );
 
 export const createSchema = createInsertSchema(previewDeployments, {
-	applicationId: z.string(),
+	applicationId: z.string().optional(),
+	composeId: z.string().optional(),
 });
 
 export const apiCreatePreviewDeployment = createSchema
@@ -71,4 +78,36 @@ export const apiCreatePreviewDeployment = createSchema
 	.extend({
 		applicationId: z.string().min(1),
 		// deploymentId: z.string().min(1),
+	})
+	.superRefine((input, ctx) => {
+		if (!input.applicationId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["applicationId"],
+				message: "Application ID is required for application preview deployments",
+			});
+		}
+	});
+
+export const apiCreateComposePreviewDeployment = createSchema
+	.pick({
+		composeId: true,
+		domainId: true,
+		branch: true,
+		pullRequestId: true,
+		pullRequestNumber: true,
+		pullRequestURL: true,
+		pullRequestTitle: true,
+	})
+	.extend({
+		composeId: z.string().min(1),
+	})
+	.superRefine((input, ctx) => {
+		if (!input.composeId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ["composeId"],
+				message: "Compose ID is required for compose preview deployments",
+			});
+		}
 	});
