@@ -2,6 +2,7 @@ import { slugify } from "@/lib/slug";
 import { db } from "@/server/db";
 import {
 	apiCreateCompose,
+	apiCreateComposePreviewDeployment,
 	apiDeleteCompose,
 	apiFetchServices,
 	apiFindCompose,
@@ -23,11 +24,14 @@ import {
 	createCommand,
 	createCompose,
 	createComposeByTemplate,
+	createComposePreviewDeployment,
 	createDomain,
 	createMount,
 	deleteMount,
 	findComposeById,
 	findDomainsByComposeId,
+	findPreviewDeploymentById,
+	findPreviewDeploymentsByComposeId,
 	findProjectById,
 	findServerById,
 	findUserById,
@@ -37,6 +41,7 @@ import {
 	removeCompose,
 	removeComposeDirectory,
 	removeDeploymentsByComposeId,
+	removePreviewDeployment,
 	removeDomainById,
 	startCompose,
 	stopCompose,
@@ -746,5 +751,62 @@ export const composeRouter = createTRPCRouter({
 					message: `Error importing template: ${error instanceof Error ? error.message : error}`,
 				});
 			}
+		}),
+	// Preview Deployment routes
+	previewDeployments: protectedProcedure
+		.input(z.object({ composeId: z.string() }))
+		.query(async ({ input, ctx }) => {
+			const compose = await findComposeById(input.composeId);
+			if (
+				compose.project.organizationId !== ctx.session.activeOrganizationId
+			) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You are not authorized to access this compose service",
+				});
+			}
+			return await findPreviewDeploymentsByComposeId(input.composeId);
+		}),
+	createPreviewDeployment: protectedProcedure
+		.input(apiCreateComposePreviewDeployment)
+		.mutation(async ({ input, ctx }) => {
+			const compose = await findComposeById(input.composeId);
+			if (
+				compose.project.organizationId !== ctx.session.activeOrganizationId
+			) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You are not authorized to create preview deployments for this compose service",
+				});
+			}
+			return await createComposePreviewDeployment(input);
+		}),
+	deletePreviewDeployment: protectedProcedure
+		.input(z.object({ previewDeploymentId: z.string() }))
+		.mutation(async ({ input, ctx }) => {
+			const previewDeployment = await findPreviewDeploymentById(
+				input.previewDeploymentId,
+			);
+			
+			// Check if it's a compose preview deployment and user has access
+			if (previewDeployment.composeId) {
+				const compose = await findComposeById(previewDeployment.composeId);
+				if (
+					compose.project.organizationId !== ctx.session.activeOrganizationId
+				) {
+					throw new TRPCError({
+						code: "UNAUTHORIZED",
+						message: "You are not authorized to delete this preview deployment",
+					});
+				}
+			} else {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This is not a compose preview deployment",
+				});
+			}
+			
+			await removePreviewDeployment(input.previewDeploymentId);
+			return true;
 		}),
 });

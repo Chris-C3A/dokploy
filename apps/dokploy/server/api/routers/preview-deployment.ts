@@ -30,10 +30,12 @@ export const previewDeploymentRouter = createTRPCRouter({
 			const previewDeployment = await findPreviewDeploymentById(
 				input.previewDeploymentId,
 			);
-			if (
-				previewDeployment.application.project.organizationId !==
-				ctx.session.activeOrganizationId
-			) {
+			
+			// Check if user has access to the preview deployment (works for both app and compose)
+			const organizationId = previewDeployment.application?.project.organizationId || 
+													 previewDeployment.compose?.project.organizationId;
+			
+			if (!organizationId || organizationId !== ctx.session.activeOrganizationId) {
 				throw new TRPCError({
 					code: "UNAUTHORIZED",
 					message: "You are not authorized to delete this preview deployment",
@@ -48,10 +50,12 @@ export const previewDeploymentRouter = createTRPCRouter({
 			const previewDeployment = await findPreviewDeploymentById(
 				input.previewDeploymentId,
 			);
-			if (
-				previewDeployment.application.project.organizationId !==
-				ctx.session.activeOrganizationId
-			) {
+			
+			// Check if user has access to the preview deployment (works for both app and compose)
+			const organizationId = previewDeployment.application?.project.organizationId || 
+													 previewDeployment.compose?.project.organizationId;
+			
+			if (!organizationId || organizationId !== ctx.session.activeOrganizationId) {
 				throw new TRPCError({
 					code: "UNAUTHORIZED",
 					message: "You are not authorized to access this preview deployment",

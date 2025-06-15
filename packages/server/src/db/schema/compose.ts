@@ -11,6 +11,7 @@ import { gitea } from "./gitea";
 import { github } from "./github";
 import { gitlab } from "./gitlab";
 import { mounts } from "./mount";
+import { previewDeployments } from "./preview-deployments";
 import { projects } from "./project";
 import { server } from "./server";
 import { applicationStatus, triggerType } from "./shared";
@@ -111,6 +112,7 @@ export const composeRelations = relations(compose, ({ one, many }) => ({
 		references: [projects.projectId],
 	}),
 	deployments: many(deployments),
+	previewDeployments: many(previewDeployments),
 	mounts: many(mounts),
 	customGitSSHKey: one(sshKeys, {
 		fields: [compose.customGitSSHKeyId],
