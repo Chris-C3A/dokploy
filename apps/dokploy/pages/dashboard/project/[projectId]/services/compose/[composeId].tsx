@@ -9,6 +9,7 @@ import { DeleteService } from "@/components/dashboard/compose/delete-service";
 import { ShowGeneralCompose } from "@/components/dashboard/compose/general/show";
 import { ShowDockerLogsCompose } from "@/components/dashboard/compose/logs/show";
 import { ShowDockerLogsStack } from "@/components/dashboard/compose/logs/show-stack";
+import { ShowComposePreviewDeployments } from "@/components/dashboard/compose/preview-deployments/show-compose-preview-deployments";
 import { UpdateCompose } from "@/components/dashboard/compose/update-compose";
 import { ShowBackups } from "@/components/dashboard/database/backups/show-backups";
 import { ComposeFreeMonitoring } from "@/components/dashboard/monitoring/free/container/show-free-compose-monitoring";
@@ -57,7 +58,8 @@ type TabState =
 	| "advanced"
 	| "deployments"
 	| "domains"
-	| "monitoring";
+	| "monitoring"
+	| "preview-deployments";
 
 const Service = (
 	props: InferGetServerSidePropsType<typeof getServerSideProps>,
@@ -219,16 +221,17 @@ const Service = (
 											className={cn(
 												"xl:grid xl:w-fit max-md:overflow-y-scroll justify-start",
 												isCloud && data?.serverId
-													? "xl:grid-cols-9"
+													? "xl:grid-cols-10"
 													: data?.serverId
-														? "xl:grid-cols-8"
-														: "xl:grid-cols-9",
+														? "xl:grid-cols-9"
+														: "xl:grid-cols-10",
 											)}
 										>
 											<TabsTrigger value="general">General</TabsTrigger>
 											<TabsTrigger value="environment">Environment</TabsTrigger>
 											<TabsTrigger value="domains">Domains</TabsTrigger>
 											<TabsTrigger value="deployments">Deployments</TabsTrigger>
+											<TabsTrigger value="preview-deployments">Preview Deployments</TabsTrigger>
 											<TabsTrigger value="backups">Backups</TabsTrigger>
 											<TabsTrigger value="schedules">Schedules</TabsTrigger>
 											<TabsTrigger value="logs">Logs</TabsTrigger>
@@ -339,6 +342,12 @@ const Service = (
 												serverId={data?.serverId || ""}
 												refreshToken={data?.refreshToken || ""}
 											/>
+										</div>
+									</TabsContent>
+
+									<TabsContent value="preview-deployments">
+										<div className="flex flex-col gap-4 pt-2.5">
+											<ShowComposePreviewDeployments composeId={composeId} />
 										</div>
 									</TabsContent>
 
